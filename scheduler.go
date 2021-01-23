@@ -49,30 +49,46 @@ func DoTickerSchedule(ctx context.Context, work func(), delay time.Duration) {
 	}(ctx)
 }
 
+func DelaySchedule(work func(), delay time.Duration) {
+	time.AfterFunc(delay, work)
+}
+
 type TimeFunction interface {
 	Run()
 }
+
+type Options struct {
+	Tick        int64
+	SlotNum     int32
+	Interval    time.Duration
+	MaxDealTask int32
+}
+
+type Option func(opts *Options)
 
 type HashTimeWheel struct {
 	rwLock     sync.RWMutex
 	buckets    []*timeBucket
 	timeTicker *time.Ticker
-	interval   time.Duration
-	topSign    chan bool
-	tick       int64
-	slotNum    int32
+	stopSign   chan bool
+	opts       *Options
 }
 
-func NewTimeWheel(interval time.Duration, slotNum int32) *HashTimeWheel {
-	htw := &HashTimeWheel{
-		rwLock:     sync.RWMutex{},
-		interval:   interval,
-		timeTicker: time.NewTicker(interval),
-		topSign:    make(chan bool),
-		buckets:    make([]*timeBucket, slotNum, slotNum),
+func NewTimeWheel(opt ...Option) *HashTimeWheel {
+	opts := &Options{}
+	for _, op := range opt {
+		op(opts)
 	}
 
-	for i := int32(0); i < slotNum; i ++ {
+	htw := &HashTimeWheel{
+		rwLock:     sync.RWMutex{},
+		opts:       opts,
+		timeTicker: time.NewTicker(opts.Interval),
+		stopSign:   make(chan bool),
+		buckets:    make([]*timeBucket, opts.Interval, opts.SlotNum),
+	}
+
+	for i := int32(0); i < opts.SlotNum; i++ {
 		htw.buckets[i] = newTimeBucket()
 	}
 	return htw
@@ -84,14 +100,14 @@ func (htw *HashTimeWheel) Start() {
 			select {
 			case <-htw.timeTicker.C:
 				htw.process()
-			case <-htw.topSign:
+			case <-htw.stopSign:
 				return
 			}
 		}
 	})
 }
 
-func (htw *HashTimeWheel) AddTask(f TimeFunction, delay time.Duration)  {
+func (htw *HashTimeWheel) AddTask(f TimeFunction, delay time.Duration) {
 	pos, circle := htw.getSlots(delay)
 	task := timeTask{
 		circle: circle,
@@ -103,18 +119,21 @@ func (htw *HashTimeWheel) AddTask(f TimeFunction, delay time.Duration)  {
 }
 
 func (htw *HashTimeWheel) Stop() {
-	htw.topSign <- true
+	htw.stopSign <- true
 	htw.clearAllAndProcess()
+	for _, b := range htw.buckets {
+		close(b.worker)
+	}
 }
 
 func (htw *HashTimeWheel) process() {
-	currentBucket := htw.buckets[htw.tick]
+	currentBucket := htw.buckets[htw.opts.Tick]
 	htw.scanExpireAndRun(currentBucket)
-	htw.tick = (htw.tick + 1) % int64(htw.slotNum)
+	htw.opts.Tick = (htw.opts.Tick + 1) % int64(htw.opts.SlotNum)
 }
 
-func (htw *HashTimeWheel) clearAllAndProcess()  {
-	for i := htw.slotNum; i > 0; i -- {
+func (htw *HashTimeWheel) clearAllAndProcess() {
+	for i := htw.opts.SlotNum; i > 0; i-- {
 		htw.process()
 	}
 }
@@ -150,23 +169,28 @@ func newTimeBucket() *timeBucket {
 }
 
 func (htw *HashTimeWheel) scanExpireAndRun(tb *timeBucket) {
+	execCnt := int32(0)
+	maxDealTaskCnt := htw.opts.MaxDealTask
+	timeout := time.NewTimer(htw.opts.Interval)
 	defer tb.rwLock.Unlock()
 	tb.rwLock.Lock()
-	execCnt := 0
-	for item := tb.queue.Front(); item != nil; {
+	for item := tb.queue.Front(); item != nil && maxDealTaskCnt >= execCnt; {
 		task := item.Value.(timeTask)
 		if task.circle < 0 {
-			timeout := time.After(htw.interval)
-			select {
-			case tb.worker <- task:
-				execCnt++
-				next := item.Next()
-				tb.queue.Remove(item)
-				item = next
-			case <-timeout:
-				item = item.Next()
-				continue
+			deal := func() {
+				defer timeout.Reset(htw.opts.Interval)
+				select {
+				case tb.worker <- task:
+					execCnt++
+					next := item.Next()
+					tb.queue.Remove(item)
+					item = next
+				case <-timeout.C:
+					item = item.Next()
+					return
+				}
 			}
+			deal()
 		} else {
 			task.circle -= 1
 			item = item.Next()
@@ -183,8 +207,6 @@ type timeTask struct {
 
 func (htw *HashTimeWheel) getSlots(d time.Duration) (pos int32, circle int32) {
 	delayTime := int64(d.Seconds())
-	interval := int64(htw.interval.Seconds())
-	return int32(htw.tick+delayTime/interval) % htw.slotNum, int32(delayTime / interval / int64(htw.slotNum))
+	interval := int64(htw.opts.Interval.Seconds())
+	return int32(htw.opts.Tick+delayTime/interval) % htw.opts.SlotNum, int32(delayTime / interval / int64(htw.opts.SlotNum))
 }
-
-

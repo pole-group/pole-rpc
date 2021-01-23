@@ -20,22 +20,15 @@ import (
 var (
 	TestHelloWorld = "TestHelloWorld"
 	TestPort       = int32(8888)
-)
-
-func createTestEndpointRepository() EndpointRepository {
-	repository := NewDefaultEndpointRepository()
-
-	repository.Put(TestHelloWorld, Endpoint{
+	TestEndpoint   = Endpoint{
 		Key:  "",
 		Host: "127.0.0.1",
 		Port: TestPort,
-	})
-
-	return repository
-}
+	}
+)
 
 func createTestClient() (TransportClient, error) {
-	return NewTransportClient(ConnectTypeRSocket, createTestEndpointRepository(), false)
+	return NewTransportClient(ConnectTypeRSocket, false)
 }
 
 func createTestServer(ctx context.Context) *RSocketServer {
@@ -78,7 +71,7 @@ func TestRSocketClient_Request(t *testing.T) {
 
 	reqId := uuid.New().String()
 
-	cResp, err := client.Request(context.Background(), TestHelloWorld, &ServerRequest{
+	cResp, err := client.Request(context.Background(), TestEndpoint, &ServerRequest{
 		FunName:   TestHelloWorld,
 		RequestId: reqId,
 	})
@@ -119,14 +112,12 @@ func Test_RequestId_ServerCtx_Change(t *testing.T) {
 		fmt.Printf("receive client requst : %#v\n", rpcCtx.GetReq())
 		for i := 0; i < 10; i++ {
 			rpcCtx.Send(&ServerResponse{
-				FunName:   rpcCtx.GetReq().FunName,
-				RequestId: rpcCtx.GetReq().RequestId,
 				Code:      int32(i),
 			})
 		}
 	})
 	waitG := sync.WaitGroup{}
-	waitG.Add(20)
+	waitG.Add(10)
 
 	uuidHolder := atomic.Value{}
 
@@ -136,30 +127,27 @@ func Test_RequestId_ServerCtx_Change(t *testing.T) {
 		assert.Equalf(t, uuidHolder.Load().(string), resp.RequestId, "req-id must equal")
 	}
 
-	rpcCtx, err := client.RequestChannel(ctx, TestHelloWorld, call)
+	rpcCtx, err := client.RequestChannel(ctx, TestEndpoint, call)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
 	reqId := uuid.New().String()
-
 	uuidHolder.Store(reqId)
-
 	rpcCtx.Send(&ServerRequest{
 		FunName:   TestHelloWorld,
 		RequestId: reqId,
 	})
+	waitG.Wait()
 
+	waitG.Add(10)
 	reqId = uuid.New().String()
-
 	uuidHolder.Store(reqId)
-
 	rpcCtx.Send(&ServerRequest{
 		FunName:   TestHelloWorld,
 		RequestId: reqId,
 	})
-
 	waitG.Wait()
 }
 
@@ -190,7 +178,7 @@ func Test_ConnectedEvent(t *testing.T) {
 		eventHolder.Store(eventType)
 	})
 
-	_, _ = client.Request(ctx, TestHelloWorld, &ServerRequest{RequestId: uuid.New().String()})
+	_, _ = client.Request(ctx, TestEndpoint, &ServerRequest{RequestId: uuid.New().String()})
 
 	<-timeout
 
@@ -199,7 +187,7 @@ func Test_ConnectedEvent(t *testing.T) {
 	timeout = time.After(time.Duration(3) * time.Second)
 	assert.Nil(t, client.Close(), "close must success")
 
-	<- timeout
+	<-timeout
 
-	assert.Equalf(t, ConnectEventForDisConnected, eventHolder.Load(), "must be receive connected event")
+	assert.Equalf(t, ConnectEventForDisConnected, eventHolder.Load(), "must be receive disconnected event")
 }
