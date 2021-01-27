@@ -244,9 +244,7 @@ func newTimeBucket() *timeBucket {
 		queue:  list.New(),
 		worker: make(chan timeTask, 32),
 	}
-	GoEmpty(func() {
-		tb.execUserTask()
-	})
+	GoEmpty(tb.execUserTask)
 	return tb
 }
 
@@ -297,6 +295,7 @@ func (htw *HashTimeWheel) getSlots(d time.Duration) (pos int32, circle int32) {
 var DefaultScheduler *RoutinePool = NewRoutinePool(16, 128)
 
 type RoutinePool struct {
+	lock         sync.Locker
 	size         int32
 	cacheSize    int32
 	isRunning    int32
@@ -309,6 +308,9 @@ func defaultPanicHandler(err interface{}) {
 	RpcLog.Error("when exec user task occur panic : %#v", err)
 }
 
+//NewRoutinePool 构建一个新的协程池
+//size int32 协程数量
+//cacheSize 任务缓存通道大小
 func NewRoutinePool(size, cacheSize int32) *RoutinePool {
 	pool := &RoutinePool{
 		size:         size,
@@ -322,6 +324,40 @@ func NewRoutinePool(size, cacheSize int32) *RoutinePool {
 	return pool
 }
 
+//Resize 重新调整协程池的大小
+func (rp *RoutinePool) Resize(newSize int32) {
+	defer rp.lock.Unlock()
+	rp.lock.Lock()
+	if newSize < rp.size {
+		newWorkers := make([]worker, newSize, newSize)
+		i := int32(0)
+		for ; i < newSize; i++ {
+			newWorkers[i] = rp.workers[i]
+		}
+		for ; i < rp.size; i++ {
+			atomic.StoreInt32(&rp.workers[i].shutdown, 1)
+		}
+		rp.workers = newWorkers
+		rp.size = newSize
+		return
+	}
+	if newSize > rp.size {
+		newWorkers := make([]worker, newSize, newSize)
+		i := int32(0)
+		for ; i < rp.size; i++ {
+			newWorkers[i] = rp.workers[i]
+		}
+		for ; i < newSize; i++ {
+			newWorkers[i] = worker{owner: rp}
+			GoEmpty(newWorkers[i].run)
+		}
+		rp.workers = newWorkers
+		rp.size = newSize
+		return
+	}
+}
+
+//SetPanicHandler 设置出现panic时的处理函数
 func (rp *RoutinePool) SetPanicHandler(panicHandler func(err interface{})) {
 	rp.panicHandler = panicHandler
 }
@@ -335,21 +371,27 @@ func (rp *RoutinePool) init() {
 	}
 }
 
+//Submit(task func()) 提交一个函数任务
 func (rp *RoutinePool) Submit(task func()) {
 	rp.taskChan <- task
 }
 
+//Close 关闭协程池
 func (rp *RoutinePool) Close() {
 	atomic.StoreInt32(&rp.isRunning, 0)
 	close(rp.taskChan)
 }
 
 type worker struct {
-	owner *RoutinePool
+	shutdown int32
+	owner    *RoutinePool
 }
 
 func (w worker) run() {
 	for task := range w.owner.taskChan {
+		if atomic.LoadInt32(&w.shutdown) == 1 {
+			return
+		}
 		deal := func() {
 			defer func() {
 				if err := recover(); err != nil {
@@ -365,6 +407,7 @@ func (w worker) run() {
 	}
 }
 
+//异步任务的Future持有，可以通过这个取消一个异步任务的运行
 type Future interface {
 	run()
 	Cancel()
