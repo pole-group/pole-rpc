@@ -14,12 +14,32 @@ const (
 	IndexOutOfBoundErrMsg = "index out of bound, index=%d, offset=%d, pos=%d"
 )
 
+type CSliceOption func(opts *CSliceOptions)
+
+type CSliceOptions struct {
+	capacity int32
+}
+
 type ConcurrentSlice struct {
 	lock     sync.RWMutex
 	capacity int32
 	size     int32
 	cursor   int32
 	values   []interface{}
+}
+
+func NewConcurrentSlice(opts ...CSliceOption) *ConcurrentSlice {
+	cfg := new(CSliceOptions)
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return &ConcurrentSlice{
+		lock:     sync.RWMutex{},
+		capacity: 0,
+		size:     0,
+		cursor:   0,
+		values:   make([]interface{}, cfg.capacity, cfg.capacity),
+	}
 }
 
 func (cs *ConcurrentSlice) Remove(v interface{}) {
@@ -42,6 +62,7 @@ func (cs *ConcurrentSlice) Add(v interface{}) {
 		newValues := make([]interface{}, cs.capacity+cs.capacity/2, cs.capacity+cs.capacity/2)
 		copy(newValues, cs.values)
 		cs.values = newValues
+		cs.capacity = int32(len(cs.values))
 	}
 	cs.values[cs.cursor] = v
 	cs.cursor++
@@ -118,6 +139,26 @@ func (cm *ConcurrentMap) ForEach(consumer func(k, v interface{})) {
 	for k, v := range cm.actualMap {
 		consumer(k, v)
 	}
+}
+
+func (cm *ConcurrentMap) Keys() []interface{} {
+	keys := make([]interface{}, len(cm.actualMap))
+	i := 0
+	for k, _ := range cm.actualMap {
+		keys[i] = k
+		i ++
+	}
+	return keys
+}
+
+func (cm *ConcurrentMap) Values() []interface{} {
+	values := make([]interface{}, len(cm.actualMap))
+	i := 0
+	for _, v := range cm.actualMap {
+		values[i] = v
+		i ++
+	}
+	return values
 }
 
 func (cm *ConcurrentMap) Clear() {
