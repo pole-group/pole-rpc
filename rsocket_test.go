@@ -7,6 +7,7 @@ package pole_rpc
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -20,12 +21,15 @@ import (
 var (
 	TestHelloWorld = "TestHelloWorld"
 	TestPort       = int32(8888)
-	TestEndpoint   = Endpoint{
+)
+
+func createTestEndpoint() Endpoint {
+	return Endpoint{
 		Key:  "",
 		Host: "127.0.0.1",
 		Port: TestPort,
 	}
-)
+}
 
 func createTestClient() (TransportClient, error) {
 	return NewTransportClient(ConnectTypeRSocket, false)
@@ -40,6 +44,7 @@ func TestRSocketClient_Request(t *testing.T) {
 	ctx, cancelF := context.WithCancel(context.Background())
 	defer cancelF()
 
+	TestPort = 8000 + rand.Int31n(1000)
 	server := createTestServer(ctx)
 	// 等待 Server 的启动
 	<-server.IsReady
@@ -71,7 +76,7 @@ func TestRSocketClient_Request(t *testing.T) {
 
 	reqId := uuid.New().String()
 
-	cResp, err := client.Request(context.Background(), TestEndpoint, &ServerRequest{
+	cResp, err := client.Request(context.Background(), createTestEndpoint(), &ServerRequest{
 		FunName:   TestHelloWorld,
 		RequestId: reqId,
 	})
@@ -94,6 +99,7 @@ func Test_RequestId_ServerCtx_Change(t *testing.T) {
 	ctx, cancelF := context.WithCancel(context.Background())
 	defer cancelF()
 
+	TestPort = 8000 + rand.Int31n(1000)
 	server := createTestServer(ctx)
 	// 等待 Server 的启动
 	<-server.IsReady
@@ -127,7 +133,7 @@ func Test_RequestId_ServerCtx_Change(t *testing.T) {
 		assert.Equalf(t, uuidHolder.Load().(string), resp.RequestId, "req-id must equal")
 	}
 
-	rpcCtx, err := client.RequestChannel(ctx, TestEndpoint, call)
+	rpcCtx, err := client.RequestChannel(ctx, createTestEndpoint(), call)
 	if err != nil {
 		t.Error(err)
 		return
@@ -156,6 +162,7 @@ func Test_ConnectedEvent(t *testing.T) {
 	ctx, cancelF := context.WithCancel(context.Background())
 	defer cancelF()
 
+	TestPort = 8000 + rand.Int31n(1000)
 	server := createTestServer(ctx)
 	// 等待 Server 的启动
 	<-server.IsReady
@@ -178,7 +185,7 @@ func Test_ConnectedEvent(t *testing.T) {
 		eventHolder.Store(eventType)
 	})
 
-	_, _ = client.Request(ctx, TestEndpoint, &ServerRequest{RequestId: uuid.New().String()})
+	_, _ = client.Request(ctx, createTestEndpoint(), &ServerRequest{RequestId: uuid.New().String()})
 
 	<-timeout
 
