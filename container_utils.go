@@ -103,21 +103,32 @@ func (cs *ConcurrentSlice) Size() int32 {
 	return cs.size
 }
 
+//NewConcurrentMap 创建一个新的 ConcurrentMap
+func NewConcurrentMap() *ConcurrentMap {
+	return &ConcurrentMap{
+		actualMap: make(map[interface{}]interface{}),
+		rwLock:    sync.RWMutex{},
+	}
+}
+
 type ConcurrentMap struct {
 	actualMap map[interface{}]interface{}
 	rwLock    sync.RWMutex
+	size      int
 }
 
 func (cm *ConcurrentMap) Put(k, v interface{}) {
 	defer cm.rwLock.Unlock()
 	cm.rwLock.Lock()
 	cm.actualMap[k] = v
+	cm.size++
 }
 
 func (cm *ConcurrentMap) Remove(k interface{}) {
 	defer cm.rwLock.Unlock()
 	cm.rwLock.Lock()
 	delete(cm.actualMap, k)
+	cm.size--
 }
 
 func (cm *ConcurrentMap) Get(k interface{}) interface{} {
@@ -165,13 +176,15 @@ func (cm *ConcurrentMap) Values() []interface{} {
 	return values
 }
 
-func (cm *ConcurrentMap) ComputeIfAbsent(key interface{}, supplier func() interface{}) {
+func (cm *ConcurrentMap) ComputeIfAbsent(key interface{}, supplier func() interface{}) interface{} {
 	defer cm.rwLock.Unlock()
 	cm.rwLock.Lock()
 
 	if _, exist := cm.actualMap[key]; !exist {
 		cm.actualMap[key] = supplier()
+		cm.size++
 	}
+	return cm.actualMap[key]
 }
 
 func (cm *ConcurrentMap) Clear() {
@@ -181,7 +194,7 @@ func (cm *ConcurrentMap) Clear() {
 }
 
 func (cm *ConcurrentMap) Size() int {
-	return len(cm.actualMap)
+	return cm.size
 }
 
 type void struct{}
