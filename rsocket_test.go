@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func init()  {
+func init() {
 	RpcLog = NewTestLogger("test")
 }
 
@@ -240,7 +240,7 @@ func Test_ServerConnectedEvent(t *testing.T) {
 	})
 
 	go func() {
-		time.AfterFunc(time.Duration(15) * time.Second , func() {
+		time.AfterFunc(time.Duration(15)*time.Second, func() {
 			t.Error("timeout!")
 			t.FailNow()
 		})

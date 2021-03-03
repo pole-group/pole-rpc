@@ -123,7 +123,7 @@ func (c *RSocketClient) Request(ctx context.Context, endpoint Endpoint, req *Ser
 	resp, err := pc.rc.RequestResponse(payload.New(body, EmptyBytes)).
 		Raw().
 		FlatMap(func(any reactorM.Any) reactorM.
-		Mono {
+			Mono {
 			payLoad := any.(payload.Payload)
 			resp := new(ServerResponse)
 			if err := proto.Unmarshal(payLoad.Data(), resp); err != nil {

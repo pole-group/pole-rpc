@@ -16,7 +16,6 @@ type RpcClientContext interface {
 }
 
 type RpcServerContext interface {
-
 	GetReq() *ServerRequest
 
 	Send(resp *ServerResponse) error

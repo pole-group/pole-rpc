@@ -10,10 +10,6 @@ import (
 	"sync"
 )
 
-const (
-	IndexOutOfBoundErrMsg = "index out of bound, index=%d, offset=%d, pos=%d"
-)
-
 type CSliceOption func(opts *CSliceOptions)
 
 type CSliceOptions struct {
@@ -28,6 +24,7 @@ type ConcurrentSlice struct {
 	values   []interface{}
 }
 
+//NewConcurrentSlice 创建并发的 slice
 func NewConcurrentSlice(opts ...CSliceOption) *ConcurrentSlice {
 	cfg := new(CSliceOptions)
 	for _, opt := range opts {
@@ -232,12 +229,14 @@ type Set struct {
 	container map[interface{}]void
 }
 
+//NewSet 创建一个非协程安全的Set
 func NewSet() *Set {
 	return &Set{
 		container: make(map[interface{}]void),
 	}
 }
 
+//NewSetWithValues 根据给的数据创建一个 Set
 func NewSetWithValues(arr ...interface{}) *Set {
 	s := &Set{
 		container: make(map[interface{}]void),
@@ -248,41 +247,49 @@ func NewSetWithValues(arr ...interface{}) *Set {
 	return s
 }
 
+//Range 遍历 Set 里面的所有元素
 func (s *Set) Range(f func(value interface{})) {
 	for v := range s.container {
 		f(v)
 	}
 }
 
+//Add 添加元素
 func (s *Set) Add(value interface{}) {
 	s.container[value] = member
 }
 
+//AddAll 批量添加元素
 func (s *Set) AddAll(values ...interface{}) {
 	for _, v := range values {
 		s.container[v] = member
 	}
 }
 
+//AddAllWithSet
 func (s *Set) AddAllWithSet(set *Set) {
 	set.Range(func(value interface{}) {
 		s.container[value] = member
 	})
 }
 
+//Remove
 func (s *Set) Remove(value interface{}) {
 	delete(s.container, value)
 }
 
+//Size
 func (s *Set) Size() int {
 	return len(s.container)
 }
 
+//Contain
 func (s *Set) Contain(value interface{}) bool {
 	_, exist := s.container[value]
 	return exist
 }
 
+//RetainAll
 func (s *Set) RetainAll(arr ...interface{}) {
 	for _, e := range arr {
 		if !s.Contain(e) {
@@ -291,6 +298,7 @@ func (s *Set) RetainAll(arr ...interface{}) {
 	}
 }
 
+//RetainAllWithSet
 func (s *Set) RetainAllWithSet(set *Set) {
 	set.Range(func(value interface{}) {
 		if !s.Contain(value) {
@@ -299,18 +307,21 @@ func (s *Set) RetainAllWithSet(set *Set) {
 	})
 }
 
+//RemoveAll
 func (s *Set) RemoveAll(arr []interface{}) {
 	for _, e := range arr {
 		delete(s.container, e)
 	}
 }
 
+//RemoveAllWithSet 移除某些 set 里面的数据
 func (s *Set) RemoveAllWithSet(set *Set) {
 	set.Range(func(value interface{}) {
 		delete(s.container, value)
 	})
 }
 
+//ToSlice 从 Set 转为 Slice
 func (s *Set) ToSlice() []interface{} {
 	arr := make([]interface{}, len(s.container))
 	for v := range s.container {
@@ -319,6 +330,7 @@ func (s *Set) ToSlice() []interface{} {
 	return arr
 }
 
+//IsEmpty 判断 set 是否为空
 func (s *Set) IsEmpty() bool {
 	return s.Size() == 0
 }
@@ -328,7 +340,8 @@ type ConcurrentSet struct {
 	container *Set
 }
 
-func NewSyncSet() *ConcurrentSet {
+//NewConcurrentSet 创建一个并发的 Set
+func NewConcurrentSet() *ConcurrentSet {
 	return &ConcurrentSet{
 		lock:      sync.RWMutex{},
 		container: NewSet(),
@@ -365,6 +378,7 @@ type SegmentList struct {
 	size        int32
 }
 
+//NewSegmentList
 func NewSegmentList() *SegmentList {
 	sl := &SegmentList{
 		segments: nil,
@@ -564,7 +578,7 @@ func (s *Segment) Add(e interface{}) {
 
 func (s *Segment) Get(index int32) (interface{}, error) {
 	if !(index < s.pos && index >= s.offset) {
-		return nil, fmt.Errorf(IndexOutOfBoundErrMsg, index, s.offset, s.pos)
+		return nil, fmt.Errorf("index out of bound, index=%d, offset=%d, pos=%d", index, s.offset, s.pos)
 	}
 	return s.elements[index], nil
 }
