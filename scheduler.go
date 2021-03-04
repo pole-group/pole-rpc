@@ -18,8 +18,8 @@ import (
 //Go 将一个方法异步放入协程池中执行
 func Go(arg interface{}, work func(arg interface{})) {
 	DefaultScheduler.Submit(Job{
-		f:   work,
-		arg: arg,
+		F:   work,
+		Arg: arg,
 	})
 }
 
@@ -298,8 +298,8 @@ func (htw *HashTimeWheel) getSlots(d time.Duration) (pos int32, circle int32) {
 }
 
 type Job struct {
-	f   func(arg interface{})
-	arg interface{}
+	F   func(arg interface{})
+	Arg interface{}
 }
 
 var DefaultScheduler *RoutinePool = NewRoutinePool(16, 128)
@@ -408,7 +408,7 @@ func (w worker) run() {
 					w.owner.panicHandler(err)
 				}
 			}()
-			task.f(task.arg)
+			task.F(task.Arg)
 		}
 		deal()
 		if atomic.LoadInt32(&w.owner.isRunning) == int32(0) {
