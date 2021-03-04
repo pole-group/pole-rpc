@@ -143,7 +143,7 @@ func (c *RSocketClient) RequestChannel(ctx context.Context, endpoint Endpoint, c
 		return nil, err
 	}
 
-	rpcCtx := &rSocketClientRpcContext{}
+	rpcCtx := &ClientRpcContext{}
 
 	f := reactorF.Create(func(ctx context.Context, s reactorF.Sink) {
 		rpcCtx.fSink = s

@@ -14,12 +14,17 @@ import (
 
 var ErrorCannotResponse = fmt.Errorf("cann't send reponse to client")
 
-type rSocketClientRpcContext struct {
+type ClientRpcContext struct {
 	fSink reactorF.Sink
 }
 
-func (rpc *rSocketClientRpcContext) Send(resp *ServerRequest) {
+func (rpc *ClientRpcContext) Send(resp *ServerRequest) {
 	rpc.fSink.Next(resp)
+}
+
+func (rpc *ClientRpcContext) Close() error {
+	rpc.fSink.Complete()
+	return nil
 }
 
 type rSocketServerRpcContext struct {

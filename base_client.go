@@ -13,6 +13,8 @@ import (
 
 type RpcClientContext interface {
 	Send(resp *ServerRequest)
+
+	Close() error
 }
 
 type RpcServerContext interface {

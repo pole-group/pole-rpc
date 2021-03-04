@@ -90,8 +90,6 @@ func NewTransportServer(ctx context.Context, options ...ServerOptions) (Transpor
 	switch opt.ConnectType {
 	case ConnectTypeRSocket:
 		return newRSocketServer(ctx, *opt), nil
-	case ConnectWebSocket:
-		return newWebSocketServer(ctx, *opt), nil
 	default:
 		return nil, nil
 	}
@@ -108,8 +106,6 @@ func NewTransportClient(options ...ClientOptions) (TransportClient, error) {
 	switch opt.ConnectType {
 	case ConnectTypeRSocket:
 		return newRSocketClient(*opt)
-	case ConnectWebSocket:
-		return newWebSocketClient(*opt)
 	default:
 		return nil, nil
 	}
