@@ -23,7 +23,7 @@ func Go(arg interface{}, work func(arg interface{})) {
 	})
 }
 
-// DoTickerSchedule 利用 time.Timer 实现的周期执行，其中每次任务执行的间隔是可以动态调整的，通过 supplier func() time.Duration 函数
+//DoTimerSchedule 利用 time.Timer 实现的周期执行，其中每次任务执行的间隔是可以动态调整的，通过 supplier func() time.Duration 函数
 // 如果在 work 方法运行期间出现 panic，则无法保证任务可以继续正常执行，因此需要 work 自行 defer 去 recover 住 panic 的 Error 信息并进行处理
 func DoTimerSchedule(work func(), delay time.Duration, supplier func() time.Duration) Future {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -61,7 +61,7 @@ func DoTickerSchedule(work func(), delay time.Duration) Future {
 	return NewCtxFuture(ctx, cancel)
 }
 
-// DelaySchedule 利用 time.After 实现的延迟执行
+//DelaySchedule 利用 time.After 实现的延迟执行
 func DelaySchedule(work func(), delay time.Duration) Future {
 	ctx, cancel := context.WithCancel(context.Background())
 	after := time.After(delay)
